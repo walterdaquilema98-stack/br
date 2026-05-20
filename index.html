@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema Industrial de Control de Calidad</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:radial-gradient(ellipse at 20% 50%,#0d1929 0%,#060a14 100%);
+  font-family:'Courier New',monospace;color:#c9d1d9;min-height:100vh;padding:10px;
+}
+.wrap{max-width:1100px;margin:0 auto;}
+
+/* HMI Header */
+.hmi-header{
+  background:linear-gradient(90deg,#0a0f1e,#111827,#0a0f1e);
+  border:1px solid #1e3a5f;border-radius:8px 8px 0 0;
+  padding:10px 20px;display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 0 30px rgba(88,166,255,.15);
+}
+.hmi-title{color:#58a6ff;font-size:15px;font-weight:bold;letter-spacing:3px;text-shadow:0 0 14px rgba(88,166,255,.5);}
+.hmi-indicators{display:flex;gap:14px;align-items:center;}
+.ind{display:flex;align-items:center;gap:5px;font-size:10px;color:#8b949e;}
+.ind-dot{width:10px;height:10px;border-radius:50%;animation:pulse 1.5s infinite;}
+.ind-dot.green{background:#3fb950;box-shadow:0 0 8px #3fb950;}
+.ind-dot.red{background:#f85149;box-shadow:0 0 8px #f85149;animation:none;}
+.ind-dot.yellow{background:#ffbe0b;box-shadow:0 0 8px #ffbe0b;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.hmi-clock{color:#58a6ff;font-size:12px;font-weight:bold;}
+
+/* Canvas */
+canvas{
+  display:block;width:100%;height:620px;
+  background:#060a14;
+  border-left:1px solid #1e3a5f;border-right:1px solid #1e3a5f;
+}
+
+/* HMI Panel inferior */
+.hmi-panel{
+  background:linear-gradient(90deg,#0a0f1e,#111827,#0a0f1e);
+  border:1px solid #1e3a5f;border-radius:0 0 8px 8px;
+  padding:10px 14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.6);
+}
+.panel-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;justify-content:space-between;}
+
+/* Grupos de control */
+.ctrl-block{
+  background:#0d1117;border:1px solid #1e3a5f;border-radius:6px;
+  padding:8px 12px;
+}
+.ctrl-title{color:#58a6ff;font-size:9px;text-transform:uppercase;letter-spacing:2px;
+  border-bottom:1px solid #1e3a5f;padding-bottom:5px;margin-bottom:7px;}
+.ctrl-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}
+.ctrl-row:last-child{margin-bottom:0;}
+
+button{
+  padding:6px 11px;font-size:10px;border:1px solid #1e3a5f;
+  background:#0d1117;color:#58a6ff;
+  border-radius:4px;cursor:pointer;transition:all .15s;
+  font-weight:bold;text-transform:uppercase;letter-spacing:1px;font-family:inherit;
+}
+button:hover{background:#1e3a5f;border-color:#58a6ff;box-shadow:0 0 10px rgba(88,166,255,.3);}
+button:active{transform:scale(.96);}
+button.on{background:#0d2818;border-color:#3fb950;color:#3fb950;box-shadow:inset 0 0 8px rgba(63,185,80,.2);}
+button.on:hover{background:#3fb950;color:#0d1117;}
+button.off{background:#1a0a0a;border-color:#f85149;color:#f85149;box-shadow:inset 0 0 8px rgba(248,81,73,.2);}
+button.off:hover{background:#f85149;color:#0d1117;}
+button.warn{border-color:#ffbe0b;color:#ffbe0b;}
+button.warn:hover{background:#ffbe0b;color:#0d1117;}
+
+.spd-row{display:flex;align-items:center;gap:7px;margin-top:5px;}
+.spd-lbl{color:#8b949e;font-size:9px;text-transform:uppercase;}
+input[type=range]{width:80px;height:4px;cursor:pointer;accent-color:#58a6ff;}
+.spd-val{color:#58a6ff;font-weight:bold;font-size:11px;min-width:26px;}
+
+/* Stats grid */
+.stats-grid{display:flex;gap:6px;flex-wrap:wrap;}
+.stat-card{
+  background:#0a0e1a;border:1px solid #1e3a5f;border-radius:5px;
+  padding:6px 10px;text-align:center;min-width:56px;
+  position:relative;overflow:hidden;
+}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+}
+.stat-card.blue::before{background:#58a6ff;}
+.stat-card.green::before{background:#3fb950;}
+.stat-card.red::before{background:#f85149;}
+.stat-card.red2::before{background:#ff4444;}
+.stat-card.blue2::before{background:#4499ff;}
+.stat-card.yellow::before{background:#ffdd00;}
+.stat-card.purple::before{background:#a78bfa;}
+.stat-lbl{color:#8b949e;font-size:8px;text-transform:uppercase;letter-spacing:.5px;}
+.stat-val{font-size:18px;font-weight:bold;margin-top:2px;}
+
+/* Alarma */
+.alarm-bar{
+  background:#1a0a0a;border:1px solid #f85149;border-radius:4px;
+  padding:4px 10px;font-size:10px;color:#f85149;
+  display:none;margin-top:6px;letter-spacing:1px;
+  animation:blink .6s infinite;
+}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+.alarm-bar.show{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HMI Header -->
+<div class="hmi-header">
+  <div class="hmi-title">⚙ SISTEMA DE CONTROL DE CALIDAD INDUSTRIAL v2.0</div>
+  <div class="hmi-indicators">
+    <div class="ind"><div class="ind-dot green" id="indBanda"></div>BANDA</div>
+    <div class="ind"><div class="ind-dot green" id="indServo"></div>SERVO</div>
+    <div class="ind"><div class="ind-dot green" id="indBrazo"></div>BRAZO</div>
+    <div class="ind"><div class="ind-dot yellow" id="indSensor"></div>SENSOR</div>
+  </div>
+  <div class="hmi-clock" id="clock">00:00:00</div>
+</div>
+
+<canvas id="c"></canvas>
+
+<!-- HMI Panel -->
+<div class="hmi-panel">
+  <div class="panel-row">
+
+    <!-- Control Banda -->
+    <div class="ctrl-block">
+      <div class="ctrl-title">PLC — Banda Transportadora</div>
+      <div class="ctrl-row">
+        <button id="btnB" class="on" onclick="toggleBand()">▶ MARCHA</button>
+        <button onclick="spawnFig()" class="warn">⊕ PIEZA</button>
+        <button onclick="resetAll()">↺ RESET</button>
+      </div>
+      <div class="spd-row">
+        <span class="spd-lbl">FREC:</span>
+        <input type="range" id="spd" min="0.3" max="3" step="0.1" value="1" oninput="setSpd(this.value)">
+        <span class="spd-val" id="spdv">1.0x</span>
+      </div>
+    </div>
+
+    <!-- Stats producción -->
+    <div class="ctrl-block">
+      <div class="ctrl-title">Producción</div>
+      <div class="stats-grid">
+        <div class="stat-card blue"><div class="stat-lbl">EN LÍNEA</div><div class="stat-val" id="cBand" style="color:#58a6ff">0</div></div>
+        <div class="stat-card green"><div class="stat-lbl">✅ APROBADAS</div><div class="stat-val" id="cOk" style="color:#3fb950">0</div></div>
+        <div class="stat-card red"><div class="stat-lbl">⛔ RECHAZADAS</div><div class="stat-val" id="cDef" style="color:#f85149">0</div></div>
+      </div>
+    </div>
+
+    <!-- Stats clasificación -->
+    <div class="ctrl-block">
+      <div class="ctrl-title">Clasificación por Color</div>
+      <div class="stats-grid">
+        <div class="stat-card red2"><div class="stat-lbl">🔴 ROJO</div><div class="stat-val" id="cR" style="color:#ff5555">0</div></div>
+        <div class="stat-card blue2"><div class="stat-lbl">🔵 AZUL</div><div class="stat-val" id="cBl" style="color:#55aaff">0</div></div>
+        <div class="stat-card yellow"><div class="stat-lbl">🟡 AMARILLO</div><div class="stat-val" id="cY" style="color:#ffdd00">0</div></div>
+      </div>
+    </div>
+
+    <!-- Estado brazo -->
+    <div class="ctrl-block">
+      <div class="ctrl-title">Brazo Robótico</div>
+      <div class="ctrl-row">
+        <button id="btnA" class="on" onclick="toggleArm()">▶ ACTIVO</button>
+      </div>
+      <div class="stats-grid" style="margin-top:5px">
+        <div class="stat-card purple"><div class="stat-lbl">ESTADO</div><div class="stat-val" id="armSt" style="color:#a78bfa;font-size:10px;margin-top:5px">REPOSO</div></div>
+        <div class="stat-card purple"><div class="stat-lbl">CICLOS</div><div class="stat-val" id="armCyc" style="color:#a78bfa">0</div></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="alarm-bar" id="alarmBar">⚠ ALARMA: PIEZA DEFECTUOSA DETECTADA — ACTIVANDO SERVO-COMPUERTA</div>
+</div>
+
+</div><!-- wrap -->
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CANVAS & GLOBALS
+// ══════════════════════════════════════════════════════════
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W,H;
+
+let bandPath=[];
+let bandOn=true, bandSpd=1, bandTime=0;
+let armOn=true;
+
+// Layout positions (computed in buildPath)
+let x1,x2,yTop,yBot;
+let armBX,armBY;          // brazo: centro del hueco de la U
+let binRed,binBlue,binYel; // 3 contenedores morados arriba
+let gatePos={x:0,y:0};
+let colorSensorPos={x:0,y:0};
+let idxGate=0, idxColorSensor=0;
+
+// State
+let figures=[], cOk=0,cDef=0,cR=0,cBl=0,cY=0,armCyc=0;
+let gate={open:false,angle:0,timer:0};
+const AL1=100,AL2=85;
+let arm={a1:Math.PI/2,ta1:Math.PI/2,elb:0.45,telb:0.45,
+         grip:false,held:null,phase:'idle',timer:0,destBin:null};
+
+// Runtime clock
+let runSec=0;
+setInterval(()=>{
+  runSec++;
+  const h=String(Math.floor(runSec/3600)).padStart(2,'0');
+  const m=String(Math.floor(runSec%3600/60)).padStart(2,'0');
+  const s=String(runSec%60).padStart(2,'0');
+  document.getElementById('clock').textContent=`${h}:${m}:${s}`;
+},1000);
+
+// ══════════════════════════════════════════════════════════
+// BUILD PATH
+// ══════════════════════════════════════════════════════════
+function buildPath(){
+  W=canvas.width; H=canvas.height;
+  bandPath=[];
+
+  x1=W*0.19; x2=W*0.81;
+  yTop=H*0.30; yBot=H*0.82;
+  const r=58;
+  let i=0;
+
+  // Bajada izquierda
+  const iLS=i;
+  for(let y=yTop;y<=yBot-r;y+=3){bandPath.push({x:x1,y});i++;}
+
+  // Curva inf izq
+  for(let a=Math.PI;a<=Math.PI*1.5;a+=0.05){
+    bandPath.push({x:x1+r+Math.cos(a)*r,y:yBot-r-Math.sin(a)*r});i++;
+  }
+
+  // Fondo — compuerta a 40%
+  const iBotS=i;
+  for(let x=x1+r;x<=x2-r;x+=3){bandPath.push({x,y:yBot});i++;}
+  idxGate=iBotS+Math.floor((i-iBotS)*0.40);
+
+  // Curva inf der
+  for(let a=Math.PI*1.5;a<=Math.PI*2;a+=0.05){
+    bandPath.push({x:x2-r+Math.cos(a)*r,y:yBot-r-Math.sin(a)*r});i++;
+  }
+
+  // Subida derecha — sensor color a 45%
+  const iRS=i;
+  for(let y=yBot-r;y>=yTop;y-=3){bandPath.push({x:x2,y});i++;}
+  idxColorSensor=iRS+Math.floor((i-iRS)*0.45);
+
+  gatePos={...bandPath[idxGate]};
+  colorSensorPos={...bandPath[idxColorSensor]};
+
+  // BRAZO: centro horizontal del hueco, mitad vertical del hueco
+  armBX=(x1+x2)/2;
+  armBY=yTop+(yBot-yTop)*0.52;
+
+  // BINS morados: arriba del canvas, 3 columnas
+  const by=H*0.12;
+  binRed ={x:W*0.25,y:by,color:'#ff4444',accent:'#ff8888',label:'ROJO',  id:'cR'};
+  binBlue={x:W*0.50,y:by,color:'#4499ff',accent:'#88bbff',label:'AZUL',  id:'cBl'};
+  binYel ={x:W*0.75,y:by,color:'#ffcc00',accent:'#ffe066',label:'AMARILLO',id:'cY'};
+}
+
+function resize(){
+  canvas.width=canvas.offsetWidth;
+  canvas.height=canvas.offsetHeight;
+  buildPath();
+}
+window.addEventListener('resize',resize);
+resize();
+
+// ══════════════════════════════════════════════════════════
+// SHAPES
+// ══════════════════════════════════════════════════════════
+const SHAPES=['square','circle','triangle','star','hexagon','diamond','pentagon'];
+const REDS   =['#f85149','#ff4444','#ff6b35','#e85d04','#ff2244'];
+const BLUES  =['#58a6ff','#4499ff','#00d4ff','#a78bfa','#0099ff'];
+const YELLOWS=['#ffbe0b','#ffdd00','#3fb950','#ffd166','#aaee22'];
+
+function randCol(){return [...REDS,...BLUES,...YELLOWS][Math.floor(Math.random()*15)];}
+function colPrimary(c){
+  if(REDS.includes(c))return'red';
+  if(BLUES.includes(c))return'blue';
+  return'yellow';
+}
+function binFor(p){return p==='red'?binRed:p==='blue'?binBlue:binYel;}
+
+function shapePath(c,t,sz){
+  switch(t){
+    case'square':   c.rect(-sz/2,-sz/2,sz,sz);break;
+    case'circle':   c.arc(0,0,sz/2,0,Math.PI*2);break;
+    case'triangle': c.moveTo(0,-sz*.6);c.lineTo(sz*.55,sz*.45);c.lineTo(-sz*.55,sz*.45);c.closePath();break;
+    case'pentagon':
+      for(let k=0;k<5;k++){const a=k*Math.PI*2/5-Math.PI/2;k?c.lineTo(Math.cos(a)*sz*.55,Math.sin(a)*sz*.55):c.moveTo(Math.cos(a)*sz*.55,Math.sin(a)*sz*.55);}c.closePath();break;
+    case'star':
+      for(let k=0;k<5;k++){const ao=k*Math.PI*2/5-Math.PI/2,ai=ao+Math.PI/5;k?c.lineTo(Math.cos(ao)*sz*.55,Math.sin(ao)*sz*.55):c.moveTo(Math.cos(ao)*sz*.55,Math.sin(ao)*sz*.55);c.lineTo(Math.cos(ai)*sz*.22,Math.sin(ai)*sz*.22);}c.closePath();break;
+    case'hexagon':
+      for(let k=0;k<6;k++){const a=k*Math.PI/3-Math.PI/6;k?c.lineTo(Math.cos(a)*sz*.5,Math.sin(a)*sz*.5):c.moveTo(Math.cos(a)*sz*.5,Math.sin(a)*sz*.5);}c.closePath();break;
+    case'diamond':  c.moveTo(0,-sz*.62);c.lineTo(sz*.42,0);c.lineTo(0,sz*.62);c.lineTo(-sz*.42,0);c.closePath();break;
+  }
+}
+
+function drawFig(x,y,rot,shape,sz,col,deformed,alpha=1){
+  ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.globalAlpha=alpha;
+  ctx.shadowColor=col+'aa';ctx.shadowBlur=10;
+  if(deformed){
+    // Pieza deformada: contorno irregular + marcas de error
+    ctx.beginPath();
+    ctx.moveTo(-sz*.75,-sz*.28);ctx.lineTo(sz*.9,-sz*.5);
+    ctx.lineTo(sz*.55,sz*.82);ctx.lineTo(-sz*.12,sz*.68);ctx.lineTo(-sz*.82,sz*.08);
+    ctx.closePath();
+    ctx.fillStyle=col;ctx.fill();
+    // Overlay de error
+    ctx.strokeStyle='#ff000088';ctx.lineWidth=2.5;ctx.stroke();
+    // Cruz de error
+    ctx.strokeStyle='#ff0000cc';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(-sz*.3,-sz*.3);ctx.lineTo(sz*.3,sz*.3);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(sz*.3,-sz*.3);ctx.lineTo(-sz*.3,sz*.3);ctx.stroke();
+  } else {
+    ctx.fillStyle=col;ctx.beginPath();shapePath(ctx,shape,sz);ctx.fill();
+    // Highlight industrial
+    ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=1.5;
+    ctx.beginPath();shapePath(ctx,shape,sz);ctx.stroke();
+    // Código QR simulado (puntito)
+    ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(sz*.2,sz*.2,sz*.22,sz*.22);
+    ctx.fillStyle='rgba(255,255,255,.6)';
+    [[0,0],[2,0],[0,2],[2,2]].forEach(([ox,oy])=>ctx.fillRect(sz*.22+ox*2,sz*.22+oy*2,2,2));
+  }
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════
+// FIGURE CLASS
+// ══════════════════════════════════════════════════════════
+class Figure{
+  constructor(){
+    this.prog=0;this.sz=22;this.rot=Math.random()*Math.PI*2;
+    this.shape=SHAPES[Math.floor(Math.random()*SHAPES.length)];
+    this.deformed=Math.random()<0.33;
+    this.color=randCol();this.primary=colPrimary(this.color);
+    this.gateOk=false;this.colorOk=false;
+    this.ejected=false;this.classified=false;this.held=false;this.done=false;
+    this.ex=0;this.ey=0;this.evx=0;this.evy=0;this.ea=1;
+  }
+  getIdx(){return Math.min(Math.floor(this.prog*(bandPath.length-1)),bandPath.length-1);}
+  getPos(){return bandPath[this.getIdx()]||{x:0,y:0};}
+  update(dt){
+    if(this.held||this.classified)return;
+    if(this.ejected){this.ex+=this.evx*dt*60;this.ey+=this.evy*dt*60;this.evy+=0.2;this.ea-=dt*1.5;return;}
+    if(this.done)return;
+    if(bandOn){this.prog+=0.00048*bandSpd;this.rot+=0.011;}
+    if(this.prog>=1)this.done=true;
+  }
+  draw(){
+    if(this.classified)return;
+    if(this.ejected){if(this.ea>0)drawFig(this.ex,this.ey,this.rot,this.shape,this.sz,this.color,this.deformed,Math.max(0,this.ea));return;}
+    if(this.done||this.held)return;
+    const p=this.getPos();drawFig(p.x,p.y,this.rot,this.shape,this.sz,this.color,this.deformed);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// INDUSTRIAL DRAWING HELPERS
+// ══════════════════════════════════════════════════════════
+
+// Perno/tornillo industrial
+function drawBolt(x,y,r=5){
+  ctx.save();
+  ctx.fillStyle='#3d4a5a';ctx.strokeStyle='#58a6ff44';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.strokeStyle='#58a6ff55';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x-r*.6,y);ctx.lineTo(x+r*.6,y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x,y-r*.6);ctx.lineTo(x,y+r*.6);ctx.stroke();
+  ctx.restore();
+}
+
+// Panel metálico de fondo
+function drawMetalPanel(x,y,w,h,color='#1a2332'){
+  ctx.save();
+  // Sombra
+  ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=15;ctx.shadowOffsetY=4;
+  ctx.fillStyle=color;
+  ctx.fillRect(x,y,w,h);
+  ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+  // Borde biselado
+  ctx.strokeStyle='#2d4a6a';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);
+  ctx.strokeStyle='#0a1525';ctx.lineWidth=1;ctx.strokeRect(x+2,y+2,w-4,h-4);
+  // Tornillos en esquinas
+  drawBolt(x+8,y+8,4);drawBolt(x+w-8,y+8,4);
+  drawBolt(x+8,y+h-8,4);drawBolt(x+w-8,y+h-8,4);
+  ctx.restore();
+}
+
+// Tubo/conducto
+function drawConduit(x1,y1,x2,y2){
+  ctx.save();
+  ctx.strokeStyle='#2d4a6a';ctx.lineWidth=6;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.strokeStyle='#3d5a7a';ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.restore();
+}
+
+// LED indicator
+function drawLED(x,y,color,on=true){
+  ctx.save();
+  ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+  ctx.fillStyle=on?color:'#1a2332';
+  if(on){ctx.shadowColor=color;ctx.shadowBlur=12;}
+  ctx.fill();
+  ctx.strokeStyle=on?color+'88':'#2d4a6a';ctx.lineWidth=1;ctx.stroke();
+  ctx.shadowBlur=0;ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════
+// DRAW BAND (industrial style)
+// ══════════════════════════════════════════════════════════
+function sp(){
+  ctx.beginPath();ctx.moveTo(bandPath[0].x,bandPath[0].y);
+  for(let i=1;i<bandPath.length;i++)ctx.lineTo(bandPath[i].x,bandPath[i].y);
+  ctx.stroke();
+}
+
+function drawBand(){
+  if(!bandPath.length)return;
+  ctx.lineCap='round';ctx.lineJoin='round';
+
+  // Sombra industrial
+  ctx.shadowColor='rgba(88,166,255,.15)';ctx.shadowBlur=30;
+  ctx.strokeStyle='#0a1525';ctx.lineWidth=74;sp();ctx.shadowBlur=0;
+
+  // Estructura metálica exterior (marco)
+  ctx.strokeStyle='#1e3452';ctx.lineWidth=70;sp();
+
+  // Superficie de la banda (textura oscura)
+  ctx.strokeStyle='#1a2840';ctx.lineWidth=60;sp();
+
+  // Líneas transversales de la banda (ribs) — simuladas con dash animado
+  ctx.strokeStyle='rgba(100,160,220,.18)';ctx.lineWidth=58;
+  ctx.setLineDash([8,16]);ctx.lineDashOffset=-bandTime*bandSpd*30;sp();ctx.setLineDash([]);
+
+  // Centro de la banda (superficie)
+  ctx.strokeStyle='#15202e';ctx.lineWidth=50;sp();
+
+  // Guía central
+  ctx.strokeStyle='rgba(88,166,255,.08)';ctx.lineWidth=2;
+  ctx.setLineDash([20,20]);ctx.lineDashOffset=-bandTime*bandSpd*44;sp();ctx.setLineDash([]);
+
+  // Borde neón industrial
+  ctx.strokeStyle='#2a5a9a';ctx.lineWidth=4;sp();
+  ctx.strokeStyle='#58a6ff';ctx.lineWidth=2;
+  ctx.shadowColor='rgba(88,166,255,.8)';ctx.shadowBlur=8;sp();ctx.shadowBlur=0;
+
+  // ENTRADA / SALIDA — poleas industriales
+  drawPulley(bandPath[0].x,bandPath[0].y,'ENTRADA',true);
+  drawPulley(bandPath[bandPath.length-1].x,bandPath[bandPath.length-1].y,'SALIDA ✅',false);
+}
+
+function drawPulley(x,y,label,isEntry){
+  ctx.save();
+  // Cuerpo de la polea
+  const gr=ctx.createRadialGradient(x,y,2,x,y,22);
+  gr.addColorStop(0,'#3d5a7a');gr.addColorStop(1,'#1a2840');
+  ctx.fillStyle=gr;ctx.shadowColor='rgba(88,166,255,.4)';ctx.shadowBlur=14;
+  ctx.beginPath();ctx.arc(x,y,22,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+  ctx.strokeStyle='#58a6ff';ctx.lineWidth=2.5;ctx.stroke();
+  // Nervios internos
+  for(let a=0;a<Math.PI*2;a+=Math.PI/3){
+    ctx.strokeStyle='#2d4a6a';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(a)*18,y+Math.sin(a)*18);ctx.stroke();
+  }
+  ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fillStyle='#58a6ff';ctx.shadowColor='#58a6ff';ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
+  // Label
+  ctx.font='bold 11px Courier New';ctx.textAlign='center';ctx.fillStyle='#58a6ff';
+  ctx.shadowColor='rgba(88,166,255,.6)';ctx.shadowBlur=8;
+  ctx.fillText(label,x,y-(isEntry?32:32));
+  ctx.shadowBlur=0;
+  // LED indicador
+  drawLED(x+(isEntry?18:-18),y-18,isEntry?'#3fb950':'#58a6ff');
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════
+// DRAW BINS (industrial containers)
+// ══════════════════════════════════════════════════════════
+function drawBins(){
+  [binRed,binBlue,binYel].forEach(b=>{
+    const bw=76,bh=58,bx=b.x-bw/2,by=b.y-bh/2;
+    ctx.save();
+
+    // Panel metálico de fondo
+    drawMetalPanel(bx,by,bw,bh,'#0e1520');
+
+    // Franja de color
+    ctx.fillStyle=b.color+'33';ctx.fillRect(bx+3,by+3,bw-6,bh-6);
+
+    // Borde de color neón
+    ctx.strokeStyle=b.color;ctx.lineWidth=2;
+    ctx.shadowColor=b.color;ctx.shadowBlur=14;
+    ctx.strokeRect(bx+3,by+3,bw-6,bh-6);ctx.shadowBlur=0;
+
+    // Tapa / etiqueta superior morada
+    ctx.fillStyle='#4a1a8a';
+    ctx.fillRect(bx-2,by-18,bw+4,18);
+    ctx.strokeStyle='#a78bfa';ctx.lineWidth=1.5;ctx.shadowColor='#a78bfa';ctx.shadowBlur=8;
+    ctx.strokeRect(bx-2,by-18,bw+4,18);ctx.shadowBlur=0;
+    ctx.font='bold 9px Courier New';ctx.textAlign='center';ctx.fillStyle='#e0ccff';
+    ctx.fillText('⬡ BIN — '+b.label,b.x,by-5);
+
+    // Punto de color grande
+    ctx.beginPath();ctx.arc(b.x,b.y-8,9,0,Math.PI*2);
+    ctx.fillStyle=b.color;ctx.shadowColor=b.color;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
+
+    // Contador
+    const cnt=document.getElementById(b.id)?parseInt(document.getElementById(b.id).textContent)||0:0;
+    ctx.font='bold 16px Courier New';ctx.fillStyle=b.color;ctx.fillText(cnt,b.x,by+bh-6);
+
+    // LEDs laterales
+    drawLED(bx+5,b.y,b.color,true);drawLED(bx+bw-5,b.y,b.color,true);
+
+    // Conductos hacia el brazo (líneas de cable)
+    ctx.strokeStyle=b.color+'44';ctx.lineWidth=1.5;ctx.setLineDash([3,6]);
+    ctx.beginPath();ctx.moveTo(b.x,by+bh);ctx.lineTo(armBX,armBY-20);ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// SERVO-COMPUERTA (industrial)
+// ══════════════════════════════════════════════════════════
+function drawGate(){
+  const gp=gatePos;
+  const ang=gate.angle;
+
+  // Panel del módulo servo (caja metálica)
+  drawMetalPanel(gp.x-38,gp.y+28,76,52,'#0e1a28');
+
+  // Etiqueta módulo
+  ctx.font='bold 9px Courier New';ctx.textAlign='center';
+  ctx.fillStyle=gate.open?'#f85149':'#3fb950';
+  ctx.shadowColor=gate.open?'#f85149':'#3fb950';ctx.shadowBlur=6;
+  ctx.fillText('⚙ SERVO M1',gp.x,gp.y+38);ctx.shadowBlur=0;
+
+  // Cables conducto
+  drawConduit(gp.x-20,gp.y+78,gp.x-20,gp.y+95);
+  drawConduit(gp.x+20,gp.y+78,gp.x+20,gp.y+95);
+
+  // LEDs de estado en el módulo
+  drawLED(gp.x-22,gp.y+50,gate.open?'#f85149':'#3fb950',true);
+  drawLED(gp.x+22,gp.y+50,'#ffbe0b',bandOn);
+
+  // Eje del servo
+  ctx.save();ctx.translate(gp.x,gp.y+28);
+  ctx.fillStyle='#2a3d52';ctx.strokeStyle='#58a6ff66';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(0,0,9,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#58a6ff';ctx.beginPath();ctx.arc(0,0,3,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+
+  // Brazo del servo (compuerta giratoria)
+  ctx.save();ctx.translate(gp.x,gp.y+28);ctx.rotate(-ang);
+  const gcol=gate.open?'#f85149':'#3fb950';
+  // Brazo principal
+  const gr=ctx.createLinearGradient(0,0,0,-42);
+  gr.addColorStop(0,gcol+'99');gr.addColorStop(1,gcol);
+  ctx.strokeStyle=gr;ctx.lineWidth=7;ctx.lineCap='round';
+  ctx.shadowColor=gcol;ctx.shadowBlur=12;
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-42);ctx.stroke();
+  // Punta con almohadilla de contacto
+  ctx.fillStyle=gcol;ctx.shadowBlur=8;
+  ctx.beginPath();ctx.arc(0,-42,6,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#ffffff44';ctx.lineWidth=1;ctx.stroke();
+  ctx.shadowBlur=0;ctx.restore();
+
+  // Zona de detección
+  ctx.save();
+  ctx.strokeStyle=gate.open?'rgba(248,81,73,.4)':'rgba(63,185,80,.2)';
+  ctx.lineWidth=1.5;ctx.setLineDash([3,5]);
+  ctx.beginPath();ctx.arc(gp.x,gp.y,52,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=gate.open?'rgba(248,81,73,.06)':'rgba(63,185,80,.03)';ctx.fill();
+  ctx.restore();
+
+  // Label superior
+  ctx.font='bold 10px Courier New';ctx.textAlign='center';
+  ctx.fillStyle='#f85149';ctx.shadowColor='#f85149';ctx.shadowBlur=6;
+  ctx.fillText('⚙ SERVO-COMPUERTA',gp.x,gp.y-62);
+  ctx.fillText('INSPECCIÓN FORMA',gp.x,gp.y-50);
+  ctx.shadowBlur=0;
+  ctx.fillStyle=gate.open?'#f85149':'#3fb950';
+  ctx.font='9px Courier New';
+  ctx.fillText(gate.open?'● ABIERTA':'● CERRADA',gp.x,gp.y-38);
+}
+
+// ══════════════════════════════════════════════════════════
+// SENSOR DE COLOR (industrial)
+// ══════════════════════════════════════════════════════════
+function drawColorSensor(){
+  const sp2=colorSensorPos;
+
+  // Panel del módulo sensor
+  drawMetalPanel(sp2.x+12,sp2.y-28,72,56,'#0e1a28');
+
+  // Cables
+  drawConduit(sp2.x+28,sp2.y+28,sp2.x+28,sp2.y+50);
+
+  // Cuerpo del sensor (cilindro)
+  ctx.save();ctx.translate(sp2.x+2,sp2.y);
+  const sg=ctx.createLinearGradient(-10,0,10,0);
+  sg.addColorStop(0,'#1a2840');sg.addColorStop(.5,'#2d4a6a');sg.addColorStop(1,'#1a2840');
+  ctx.fillStyle=sg;ctx.strokeStyle='#4a7aaa';ctx.lineWidth=2;
+  ctx.beginPath();ctx.ellipse(0,0,10,18,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+  // Lente del sensor (arcoíris pequeño)
+  const lg=ctx.createRadialGradient(0,0,0,0,0,8);
+  lg.addColorStop(0,'#ffffff');lg.addColorStop(.3,'#a78bfa');lg.addColorStop(.6,'#58a6ff');lg.addColorStop(1,'#3fb950');
+  ctx.fillStyle=lg;ctx.shadowColor='#a78bfa';ctx.shadowBlur=16;
+  ctx.beginPath();ctx.arc(0,0,8,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+
+  // Punto central
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,3,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+
+  // LEDs RGB en el módulo
+  drawLED(sp2.x+20,sp2.y-15,'#ff4444',true);
+  drawLED(sp2.x+32,sp2.y-15,'#4499ff',true);
+  drawLED(sp2.x+44,sp2.y-15,'#ffdd00',true);
+
+  // Label
+  ctx.font='bold 10px Courier New';ctx.textAlign='left';
+  ctx.fillStyle='#a78bfa';ctx.shadowColor='#a78bfa';ctx.shadowBlur=7;
+  ctx.fillText('👁 SENSOR RGB',sp2.x+18,sp2.y+18);
+  ctx.fillText('CLASIFICACIÓN COLOR',sp2.x+18,sp2.y+30);
+  ctx.shadowBlur=0;
+
+  // Haz de luz del sensor
+  ctx.save();
+  ctx.strokeStyle='rgba(167,139,250,.3)';ctx.lineWidth=1;ctx.setLineDash([2,4]);
+  ctx.beginPath();ctx.moveTo(sp2.x,sp2.y);ctx.lineTo(sp2.x-30,sp2.y);ctx.stroke();
+  ctx.setLineDash([]);ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════
+// BRAZO ROBÓTICO (industrial, en centro del hueco)
+// ══════════════════════════════════════════════════════════
+function ikArm(tx,ty){
+  const dx=tx-armBX,dy=armBY-ty;
+  const d=Math.min(Math.sqrt(dx*dx+dy*dy),AL1+AL2-2);
+  const base=Math.atan2(dy,dx);
+  const cA=(AL1*AL1+d*d-AL2*AL2)/(2*AL1*d);
+  const A=Math.acos(Math.max(-1,Math.min(1,cA)));
+  const cB=(AL1*AL1+AL2*AL2-d*d)/(2*AL1*AL2);
+  const B=Math.acos(Math.max(-1,Math.min(1,cB)));
+  return{a1:base+A,elb:Math.PI-B};
+}
+function armTip(){
+  const x1=armBX+Math.cos(arm.a1)*AL1,y1=armBY-Math.sin(arm.a1)*AL1;
+  const a2=arm.a1-arm.elb;
+  return{x1,y1,x2:x1+Math.cos(a2)*AL2,y2:y1-Math.sin(a2)*AL2,a2};
+}
+function lerpA(a,b,t){let d=b-a;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return a+d*t;}
+
+function drawArmBase(){
+  // Plataforma / columna del brazo
+  ctx.save();
+  // Base cuadrada industrial
+  drawMetalPanel(armBX-28,armBY+10,56,32,'#0e1a28');
+  drawConduit(armBX-12,armBY+42,armBX-12,armBY+65);
+  drawConduit(armBX+12,armBY+42,armBX+12,armBY+65);
+
+  // Columna vertical
+  const cg=ctx.createLinearGradient(armBX-8,0,armBX+8,0);
+  cg.addColorStop(0,'#1a2840');cg.addColorStop(.4,'#2d4a6a');cg.addColorStop(.6,'#2d4a6a');cg.addColorStop(1,'#1a2840');
+  ctx.fillStyle=cg;
+  ctx.fillRect(armBX-8,armBY-8,16,22);
+  ctx.strokeStyle='#4a7aaa';ctx.lineWidth=1.5;ctx.strokeRect(armBX-8,armBY-8,16,22);
+
+  // Plato giratorio
+  const rg=ctx.createRadialGradient(armBX,armBY,2,armBX,armBY,20);
+  rg.addColorStop(0,'#3d5a7a');rg.addColorStop(1,'#1a2840');
+  ctx.fillStyle=rg;ctx.strokeStyle='#4a7aaa';ctx.lineWidth=2;
+  ctx.shadowColor='rgba(88,166,255,.35)';ctx.shadowBlur=12;
+  ctx.beginPath();ctx.arc(armBX,armBY,20,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+
+  // Nervios de la base
+  for(let a=0;a<Math.PI*2;a+=Math.PI/4){
+    ctx.strokeStyle='#2d4a6a';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(armBX+Math.cos(a)*5,armBY+Math.sin(a)*5);
+    ctx.lineTo(armBX+Math.cos(a)*18,armBY+Math.sin(a)*18);ctx.stroke();
+  }
+  // Tornillos
+  [0,1,2,3].forEach(k=>{const a=k*Math.PI/2+Math.PI/4;drawBolt(armBX+Math.cos(a)*16,armBY+Math.sin(a)*16,3);});
+
+  // LEDs de estado
+  drawLED(armBX-25,armBY+22,armOn?'#3fb950':'#f85149',true);
+  drawLED(armBX+25,armBY+22,'#ffbe0b',arm.phase!=='idle');
+
+  // Label
+  ctx.font='9px Courier New';ctx.textAlign='center';ctx.fillStyle='#58a6ff66';
+  ctx.fillText('R-ARM-01',armBX,armBY+56);
+  ctx.restore();
+}
+
+function drawArm(){
+  drawArmBase();
+  if(!armOn)return;
+
+  const{x1,y1,x2,y2,a2}=armTip();
+
+  // Segmento 1 — con detalle industrial
+  ctx.save();
+  ctx.lineCap='round';
+
+  // Sombra del brazo
+  ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=18;
+  ctx.beginPath();ctx.moveTo(armBX+2,armBY+3);ctx.lineTo(x1+2,y1+3);ctx.stroke();
+
+  // Cuerpo del segmento 1
+  const g1=ctx.createLinearGradient(armBX,armBY,x1,y1);
+  g1.addColorStop(0,'#2d5a3d');g1.addColorStop(.5,'#3fb950');g1.addColorStop(1,'#2d5a3d');
+  ctx.strokeStyle=g1;ctx.lineWidth=14;
+  ctx.shadowColor='rgba(63,185,80,.5)';ctx.shadowBlur=12;
+  ctx.beginPath();ctx.moveTo(armBX,armBY);ctx.lineTo(x1,y1);ctx.stroke();ctx.shadowBlur=0;
+
+  // Línea de detalle
+  ctx.strokeStyle='rgba(63,185,80,.3)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(armBX,armBY);ctx.lineTo(x1,y1);ctx.stroke();
+  ctx.restore();
+
+  // Segmento 2
+  ctx.save();ctx.lineCap='round';
+  ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=16;
+  ctx.beginPath();ctx.moveTo(x1+2,y1+3);ctx.lineTo(x2+2,y2+3);ctx.stroke();
+
+  const g2=ctx.createLinearGradient(x1,y1,x2,y2);
+  g2.addColorStop(0,'#8a3020');g2.addColorStop(.5,'#f85149');g2.addColorStop(1,'#8a3020');
+  ctx.strokeStyle=g2;ctx.lineWidth=12;
+  ctx.shadowColor='rgba(248,81,73,.5)';ctx.shadowBlur=10;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.shadowBlur=0;
+  ctx.restore();
+
+  // Articulación codo
+  const ag=ctx.createRadialGradient(x1,y1,1,x1,y1,10);
+  ag.addColorStop(0,'#6a9aaa');ag.addColorStop(1,'#1a3050');
+  ctx.fillStyle=ag;ctx.strokeStyle='#58a6ff';ctx.lineWidth=2;
+  ctx.shadowColor='rgba(88,166,255,.7)';ctx.shadowBlur=10;
+  ctx.beginPath();ctx.arc(x1,y1,10,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+  drawBolt(x1,y1,4);
+
+  // Articulación base
+  const abg=ctx.createRadialGradient(armBX,armBY,1,armBX,armBY,8);
+  abg.addColorStop(0,'#6a9aaa');abg.addColorStop(1,'#1a3050');
+  ctx.fillStyle=abg;ctx.strokeStyle='#58a6ff';ctx.lineWidth=2;
+  ctx.shadowColor='rgba(88,166,255,.6)';ctx.shadowBlur=8;
+  ctx.beginPath();ctx.arc(armBX,armBY,8,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+
+  // PINZA INDUSTRIAL (efector final)
+  const gs=arm.grip?4:13;
+  const perpX=-Math.sin(a2),perpY=Math.cos(a2);
+  const dirX=Math.cos(a2)*20,dirY=-Math.sin(a2)*20;
+
+  // Cuerpo de la pinza
+  ctx.save();ctx.translate(x2,y2);ctx.rotate(a2-Math.PI/2);
+  ctx.fillStyle='#2d3a4a';ctx.strokeStyle='#ffbe0b66';ctx.lineWidth=1.5;
+  ctx.fillRect(-6,-8,12,16);ctx.strokeRect(-6,-8,12,16);
+  ctx.restore();
+
+  // Dedos de la pinza
+  ctx.strokeStyle='#ffbe0b';ctx.lineWidth=5;ctx.lineCap='round';
+  ctx.shadowColor='rgba(255,190,11,.7)';ctx.shadowBlur=10;
+  // Dedo 1
+  ctx.beginPath();ctx.moveTo(x2+perpX*gs,y2+perpY*gs);ctx.lineTo(x2+perpX*gs+dirX,y2+perpY*gs+dirY);ctx.stroke();
+  // Dedo 2
+  ctx.beginPath();ctx.moveTo(x2-perpX*gs,y2-perpY*gs);ctx.lineTo(x2-perpX*gs+dirX,y2-perpY*gs+dirY);ctx.stroke();
+  // Detalle de los dedos
+  ctx.strokeStyle='rgba(255,190,11,.3)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x2+perpX*gs,y2+perpY*gs);ctx.lineTo(x2+perpX*gs+dirX,y2+perpY*gs+dirY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2-perpX*gs,y2-perpY*gs);ctx.lineTo(x2-perpX*gs+dirX,y2-perpY*gs+dirY);ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // Figura sostenida
+  if(arm.held)drawFig(x2,y2,arm.held.rot,arm.held.shape,arm.held.sz,arm.held.color,false);
+}
+
+// ══════════════════════════════════════════════════════════
+// ARM STATE MACHINE
+// ══════════════════════════════════════════════════════════
+function updateArm(dt){
+  if(!armOn)return;
+  const s=Math.min(dt*5,0.25);
+  arm.a1=lerpA(arm.a1,arm.ta1,s);
+  arm.elb+=(arm.telb-arm.elb)*s;
+  arm.timer-=dt;
+
+  if(arm.phase==='idle'){
+    // Reposo: apunta suavemente hacia centro-arriba
+    const ik0=ikArm(armBX,armBY-AL1*0.8);
+    arm.ta1=ik0.a1;arm.telb=ik0.elb;
+
+    for(const f of figures){
+      if(f.held||f.classified||f.ejected||f.done||f.deformed)continue;
+      if(f.colorOk)continue;
+      if(f.getIdx()>=idxColorSensor){
+        f.colorOk=true;doClassify(f);return;
+      }
+    }
+  } else if(arm.phase==='reach'){
+    if(arm.timer<=0){arm.grip=true;arm.phase='lift';arm.timer=0.22;setASt('SUJETANDO');}
+  } else if(arm.phase==='lift'){
+    if(arm.timer<=0){
+      const ik2=ikArm(arm.destBin.x,arm.destBin.y+12);
+      arm.ta1=ik2.a1;arm.telb=ik2.elb;
+      arm.phase='swing';arm.timer=0.9;setASt('TRANSFIRIENDO');
+    }
+  } else if(arm.phase==='swing'){
+    if(arm.timer<=0){arm.phase='drop';arm.timer=0.2;setASt('DEPOSITANDO');}
+  } else if(arm.phase==='drop'){
+    if(arm.timer<=0){
+      if(arm.held){
+        arm.held.classified=true;arm.held.held=false;
+        const p=arm.held.primary;
+        if(p==='red'){cR++;document.getElementById('cR').textContent=cR;}
+        else if(p==='blue'){cBl++;document.getElementById('cBl').textContent=cBl;}
+        else{cY++;document.getElementById('cY').textContent=cY;}
+        cOk++;document.getElementById('cOk').textContent=cOk;
+        armCyc++;document.getElementById('armCyc').textContent=armCyc;
+        arm.held=null;
+      }
+      arm.grip=false;arm.phase='back';arm.timer=0.4;
+      const ik3=ikArm(armBX,armBY-AL1*0.8);arm.ta1=ik3.a1;arm.telb=ik3.elb;
+      setASt('RETORNANDO');
+    }
+  } else if(arm.phase==='back'){
+    if(arm.timer<=0){arm.phase='idle';bandOn=true;setASt('REPOSO');}
+  }
+}
+
+function doClassify(f){
+  bandOn=false;
+  arm.held=f;f.held=true;
+  arm.destBin=binFor(f.primary);
+  const ik1=ikArm(f.getPos().x,f.getPos().y);
+  arm.ta1=ik1.a1;arm.telb=ik1.elb;
+  arm.phase='reach';arm.timer=0.6;setASt('ALCANZANDO');
+  document.getElementById('indBrazo').style.background='#ffbe0b';
+  document.getElementById('indBrazo').style.boxShadow='0 0 8px #ffbe0b';
+  setTimeout(()=>{
+    document.getElementById('indBrazo').style.background='#3fb950';
+    document.getElementById('indBrazo').style.boxShadow='0 0 8px #3fb950';
+  },2500);
+}
+
+function setASt(s){
+  const el=document.getElementById('armSt');if(el)el.textContent=s;
+}
+
+// ══════════════════════════════════════════════════════════
+// GATE STATE MACHINE
+// ══════════════════════════════════════════════════════════
+function updateGate(dt){
+  gate.timer-=dt;
+  if(!gate.open){
+    gate.angle+=(0-gate.angle)*Math.min(dt*5,0.25);
+    for(const f of figures){
+      if(f.held||f.ejected||f.classified||f.done||f.gateOk)continue;
+      const idx=f.getIdx();
+      if(Math.abs(idx-idxGate)<14){
+        f.gateOk=true;
+        if(f.deformed){openGate(f);return;}
+      }
+    }
+  } else {
+    gate.angle+=(Math.PI/2-gate.angle)*Math.min(dt*5,0.25);
+    if(gate.timer<=0){
+      gate.open=false;cDef++;document.getElementById('cDef').textContent=cDef;
+      document.getElementById('alarmBar').classList.remove('show');
+      document.getElementById('indServo').style.background='#3fb950';
+      document.getElementById('indServo').style.boxShadow='0 0 8px #3fb950';
+    }
+  }
+}
+
+function openGate(f){
+  gate.open=true;gate.timer=1.4;
+  f.ejected=true;
+  const fp=f.getPos();
+  f.ex=fp.x;f.ey=fp.y;
+  f.evx=(Math.random()-.5)*3;f.evy=4+Math.random()*2;f.ea=1;
+  document.getElementById('alarmBar').classList.add('show');
+  document.getElementById('indServo').style.background='#f85149';
+  document.getElementById('indServo').style.boxShadow='0 0 8px #f85149';
+  setTimeout(()=>document.getElementById('alarmBar').classList.remove('show'),2000);
+}
+
+// ══════════════════════════════════════════════════════════
+// BACKGROUND INDUSTRIAL
+// ══════════════════════════════════════════════════════════
+function drawBackground(){
+  ctx.fillStyle='#060a14';ctx.fillRect(0,0,W,H);
+
+  // Grid perspectiva
+  ctx.strokeStyle='rgba(88,166,255,.04)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // Puntos de cruce del grid
+  ctx.fillStyle='rgba(88,166,255,.06)';
+  for(let x=0;x<W;x+=40)for(let y=0;y<H;y+=40){ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();}
+
+  // Zona de trabajo sombreada (área interior de la U)
+  if(bandPath.length){
+    const cx=(x1+x2)/2, cy=yTop+(yBot-yTop)*0.5;
+    const grd=ctx.createRadialGradient(cx,cy,20,cx,cy,Math.min(W,H)*0.3);
+    grd.addColorStop(0,'rgba(88,166,255,.04)');grd.addColorStop(1,'rgba(88,166,255,0)');
+    ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  }
+
+  // Piso industrial (parte inferior)
+  const floorY=yBot+75;
+  const fg=ctx.createLinearGradient(0,floorY,0,H);
+  fg.addColorStop(0,'rgba(30,58,82,.3)');fg.addColorStop(1,'rgba(10,14,25,.8)');
+  ctx.fillStyle=fg;ctx.fillRect(0,floorY,W,H-floorY);
+  ctx.strokeStyle='rgba(88,166,255,.15)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,floorY);ctx.lineTo(W,floorY);ctx.stroke();
+
+  // Rayas de piso (zona de peligro)
+  ctx.save();ctx.beginPath();ctx.rect(0,floorY,W,H-floorY);ctx.clip();
+  ctx.strokeStyle='rgba(255,190,11,.06)';ctx.lineWidth=8;
+  for(let x=-H;x<W+H;x+=28){ctx.beginPath();ctx.moveTo(x,floorY);ctx.lineTo(x+H,H);ctx.stroke();}
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════
+// MAIN LOOP
+// ══════════════════════════════════════════════════════════
+let lastT=0;
+function loop(ts){
+  const dt=Math.min((ts-lastT)/1000,0.05);lastT=ts;
+  W=canvas.width;H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  drawBackground();
+  if(bandOn)bandTime+=dt;
+  drawBand();
+  drawGate();
+  drawColorSensor();
+  drawBins();
+  updateGate(dt);
+  updateArm(dt);
+
+  figures=figures.filter(f=>{
+    if(f.ejected&&f.ea<=0)return false;
+    if(f.classified)return false;
+    if(f.done&&!f.held)return false;
+    return true;
+  });
+  figures.forEach(f=>{f.update(dt);f.draw();});
+  document.getElementById('cBand').textContent=figures.filter(f=>!f.ejected&&!f.classified).length;
+
+  drawArm();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ══════════════════════════════════════════════════════════
+// CONTROLES
+// ══════════════════════════════════════════════════════════
+function toggleBand(){
+  bandOn=!bandOn;
+  const b=document.getElementById('btnB'),d=document.getElementById('indBanda');
+  if(bandOn){b.textContent='▶ MARCHA';b.className='on';d.style.background='#3fb950';d.style.boxShadow='0 0 8px #3fb950';}
+  else{b.textContent='■ PARADA';b.className='off';d.style.background='#f85149';d.style.boxShadow='0 0 8px #f85149';}
+}
+function toggleArm(){
+  armOn=!armOn;
+  const b=document.getElementById('btnA'),d=document.getElementById('indBrazo');
+  if(armOn){b.textContent='▶ ACTIVO';b.className='on';d.style.background='#3fb950';d.style.boxShadow='0 0 8px #3fb950';setASt('REPOSO');}
+  else{b.textContent='■ INACTIVO';b.className='off';d.style.background='#f85149';d.style.boxShadow='0 0 8px #f85149';setASt('OFF');arm.phase='idle';arm.grip=false;arm.held=null;bandOn=true;}
+}
+function spawnFig(){figures.push(new Figure());}
+function resetAll(){
+  figures=[];cOk=0;cDef=0;cR=0;cBl=0;cY=0;armCyc=0;bandTime=0;
+  gate.open=false;gate.angle=0;gate.timer=0;
+  arm.phase='idle';arm.grip=false;arm.held=null;arm.ta1=Math.PI/2;arm.telb=0.45;
+  bandOn=true;runSec=0;
+  ['cOk','cDef','cR','cBl','cY','cBand','armCyc'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='0';});
+  setASt('REPOSO');
+  document.getElementById('alarmBar').classList.remove('show');
+  document.getElementById('btnB').textContent='▶ MARCHA';document.getElementById('btnB').className='on';
+}
+function setSpd(v){bandSpd=parseFloat(v);document.getElementById('spdv').textContent=parseFloat(v).toFixed(1)+'x';}
+
+// Auto-spawn
+setInterval(()=>{if(bandOn&&figures.filter(f=>!f.ejected&&!f.classified).length<8)spawnFig();},3500);
+setTimeout(spawnFig,300);setTimeout(spawnFig,1500);setTimeout(spawnFig,2800);
+</script>
+</body>
+</html>
